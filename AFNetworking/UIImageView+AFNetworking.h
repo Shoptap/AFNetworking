@@ -28,6 +28,9 @@
 #if __IPHONE_OS_VERSION_MIN_REQUIRED
 #import <UIKit/UIKit.h>
 
+/**
+ This function call is used to place an image download request directly into the queue without an UIImageView depending on it at the time.
+ */
 void enqueueImageDownloadRequest(NSURL* url);
 
 @interface AFImageCache : NSCache
