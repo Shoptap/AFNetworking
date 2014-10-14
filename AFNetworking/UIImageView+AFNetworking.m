@@ -116,7 +116,6 @@ static char kAFImageRequestOperationObjectKey;
         }
 
         AFImageRequestOperation* oldOperation = [[self class] af_operationForKey:key];
-        void(^oldCompletionBlock)() = oldOperation.completionBlock;
         AFImageRequestOperation* requestOperation = oldOperation ?: [[AFImageRequestOperation alloc] initWithRequest:urlRequest];
 		
 #ifdef _AFNETWORKING_ALLOW_INVALID_SSL_CERTIFICATES_
@@ -124,9 +123,6 @@ static char kAFImageRequestOperationObjectKey;
 #endif
 		
         [requestOperation setCompletionBlockWithSuccess:^(AFHTTPRequestOperation* operation, id responseObject) {
-            if (oldCompletionBlock) {
-                oldCompletionBlock();
-            }
             
             NSOperation* op = [[self class] af_operationForKey:key];
             
@@ -136,13 +132,10 @@ static char kAFImageRequestOperationObjectKey;
                 self.image = responseObject;
             }
 
-            [[[self class] af_sharedImageCache] cacheImage:responseObject forRequest:operation.request];
+            [[[self class] af_sharedImageCache] cacheImage:responseObject forKey:operation.request];
             [[self class] af_setOperation:nil forKey:key];
             
         } failure:^(AFHTTPRequestOperation* operation, NSError* error) {
-            if (oldCompletionBlock) {
-                oldCompletionBlock();
-            }
             
             NSOperation* op = [[self class] af_operationForKey:key];
             
@@ -154,7 +147,14 @@ static char kAFImageRequestOperationObjectKey;
         }];
 
         [[self class] af_setOperation:requestOperation forKey:key];
-        [[[self class] af_sharedImageRequestOperationQueue] addOperation:requestOperation];
+        
+        if (!requestOperation.isExecuting && requestOperation.isFinished) { /* we may have missed the completion between when we got the reference and when we changed to the new block */
+            requestOperation.completionBlock();
+        }
+        
+        if (!oldOperation) {
+            [[[self class] af_sharedImageRequestOperationQueue] addOperation:requestOperation];
+        }
     }
 }
 
