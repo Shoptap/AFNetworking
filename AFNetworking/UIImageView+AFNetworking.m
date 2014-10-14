@@ -42,61 +42,69 @@ static char kAFImageRequestOperationObjectKey;
 
 @implementation UIImageView (AFNetworking)
 
-- (AFHTTPRequestOperation *)af_imageRequestOperation {
-    return (AFHTTPRequestOperation *)objc_getAssociatedObject(self, &kAFImageRequestOperationObjectKey);
-}
-
-- (void)af_setImageRequestOperation:(AFImageRequestOperation *)imageRequestOperation {
-    objc_setAssociatedObject(self, &kAFImageRequestOperationObjectKey, imageRequestOperation, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
-
-+ (NSOperationQueue *)af_sharedImageRequestOperationQueue {
-    static NSOperationQueue *_af_imageRequestOperationQueue = nil;
++ (NSMutableDictionary*) af_imageRequestQueue {
+    static NSMutableDictionary* _af_imageRequestQueue;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        _af_imageRequestOperationQueue = [[NSOperationQueue alloc] init];
+        _af_imageRequestQueue = [NSMutableDictionary dictionary];
+    });
+    return _af_imageRequestQueue;
+}
+
++ (NSOperation*) af_operationForKey:(NSString*)key {
+    @synchronized ([UIImageView class]) {
+        return self.af_imageRequestQueue[key];
+    }
+}
+
++ (void) af_setOperation:(NSOperation*)operation forKey:(NSString*)key {
+    @synchronized ([UIImageView class]) {
+        if (operation) {
+            self.af_imageRequestQueue[key] = operation;
+        } else {
+            [self.af_imageRequestQueue removeObjectForKey:key];
+        }
+    }
+}
+
++ (NSOperationQueue*) af_sharedImageRequestOperationQueue {
+    static NSOperationQueue* _af_imageRequestOperationQueue;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        _af_imageRequestOperationQueue = [NSOperationQueue new];
         [_af_imageRequestOperationQueue setMaxConcurrentOperationCount:NSOperationQueueDefaultMaxConcurrentOperationCount];
     });
-
     return _af_imageRequestOperationQueue;
 }
 
-+ (AFImageCache *)af_sharedImageCache {
-    static AFImageCache *_af_imageCache = nil;
++ (AFImageCache*) af_sharedImageCache {
+    static AFImageCache* _af_imageCache;
     static dispatch_once_t oncePredicate;
     dispatch_once(&oncePredicate, ^{
-        _af_imageCache = [[AFImageCache alloc] init];
+        _af_imageCache = [AFImageCache new];
     });
-
     return _af_imageCache;
 }
 
-#pragma mark -
-
-- (void)setImageWithURL:(NSURL *)url {
+- (void) setImageWithURL:(NSURL*)url {
     [self setImageWithURL:url placeholderImage:nil];
 }
 
-- (void)setImageWithURL:(NSURL *)url
-       placeholderImage:(UIImage *)placeholderImage
-{
-    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+- (void) setImageWithURL:(NSURL*)url placeholderImage:(UIImage*)placeholderImage {
+    NSMutableURLRequest* request = [NSMutableURLRequest requestWithURL:url];
     [request addValue:@"image/*" forHTTPHeaderField:@"Accept"];
-
     [self setImageWithURLRequest:request placeholderImage:placeholderImage success:nil failure:nil];
 }
 
-- (void)setImageWithURLRequest:(NSURLRequest *)urlRequest
-              placeholderImage:(UIImage *)placeholderImage
-                       success:(void (^)(NSURLRequest *request, NSHTTPURLResponse *response, UIImage *image))success
-                       failure:(void (^)(NSURLRequest *request, NSHTTPURLResponse *response, NSError *error))failure
-{
-    [self cancelImageRequestOperation];
+- (void) setImageWithURLRequest:(NSURLRequest*)urlRequest
+              placeholderImage:(UIImage*)placeholderImage
+                       success:(void (^)(NSURLRequest* request, NSHTTPURLResponse* response, UIImage* image))success
+                       failure:(void (^)(NSURLRequest* request, NSHTTPURLResponse* response, NSError* error))failure {
 
-    UIImage *cachedImage = [[[self class] af_sharedImageCache] cachedImageForRequest:urlRequest];
+    UIImage* cachedImage = [[[self class] af_sharedImageCache] cachedImageForRequest:urlRequest];
+    NSString* key = [urlRequest.URL absoluteString];
+    
     if (cachedImage) {
-        self.af_imageRequestOperation = nil;
-
         if (success) {
             success(nil, nil, cachedImage);
         } else {
@@ -107,79 +115,79 @@ static char kAFImageRequestOperationObjectKey;
             self.image = placeholderImage;
         }
 
-        AFImageRequestOperation *requestOperation = [[AFImageRequestOperation alloc] initWithRequest:urlRequest];
+        AFImageRequestOperation* oldOperation = [[self class] af_operationForKey:key];
+        void(^oldCompletionBlock)() = oldOperation.completionBlock;
+        AFImageRequestOperation* requestOperation = oldOperation ?: [[AFImageRequestOperation alloc] initWithRequest:urlRequest];
 		
 #ifdef _AFNETWORKING_ALLOW_INVALID_SSL_CERTIFICATES_
 		requestOperation.allowsInvalidSSLCertificate = YES;
 #endif
 		
-        [requestOperation setCompletionBlockWithSuccess:^(AFHTTPRequestOperation *operation, id responseObject) {
-            if ([urlRequest isEqual:[self.af_imageRequestOperation request]]) {
-                if (self.af_imageRequestOperation == operation) {
-                    self.af_imageRequestOperation = nil;
-                }
-
-                if (success) {
-                    success(operation.request, operation.response, responseObject);
-                } else if (responseObject) {
-                    self.image = responseObject;
-                }
+        [requestOperation setCompletionBlockWithSuccess:^(AFHTTPRequestOperation* operation, id responseObject) {
+            if (oldCompletionBlock) {
+                oldCompletionBlock();
+            }
+            
+            NSOperation* op = [[self class] af_operationForKey:key];
+            
+            if (success) {
+                success(operation.request, operation.response, responseObject);
+            } else if (responseObject) {
+                self.image = responseObject;
             }
 
-            [[[self class] af_sharedImageCache] cacheImage:responseObject forRequest:urlRequest];
-        } failure:^(AFHTTPRequestOperation *operation, NSError *error) {
-            if ([urlRequest isEqual:[self.af_imageRequestOperation request]]) {
-                if (self.af_imageRequestOperation == operation) {
-                    self.af_imageRequestOperation = nil;
-                }
-
-                if (failure) {
-                    failure(operation.request, operation.response, error);
-                }
+            [[[self class] af_sharedImageCache] cacheImage:responseObject forRequest:operation.request];
+            [[self class] af_setOperation:nil forKey:key];
+            
+        } failure:^(AFHTTPRequestOperation* operation, NSError* error) {
+            if (oldCompletionBlock) {
+                oldCompletionBlock();
             }
+            
+            NSOperation* op = [[self class] af_operationForKey:key];
+            
+            if (failure) {
+                failure(operation.request, operation.response, error);
+            }
+            
+            [[self class] af_setOperation:nil forKey:key];
         }];
 
-        self.af_imageRequestOperation = requestOperation;
-
-        [[[self class] af_sharedImageRequestOperationQueue] addOperation:self.af_imageRequestOperation];
+        [[self class] af_setOperation:requestOperation forKey:key];
+        [[[self class] af_sharedImageRequestOperationQueue] addOperation:requestOperation];
     }
 }
 
-- (void)cancelImageRequestOperation {
-    [self.af_imageRequestOperation cancel];
-    self.af_imageRequestOperation = nil;
+- (void)cancelImageRequestOperationForKey:(NSString*)key {
+    [[[self class] af_operationForKey:key] cancel];
 }
 
 @end
 
-#pragma mark -
-
-static inline NSString * AFImageCacheKeyFromURLRequest(NSURLRequest *request) {
-    return [[request URL] absoluteString];
-}
-
 @implementation AFImageCache
 
-- (UIImage *)cachedImageForRequest:(NSURLRequest *)request {
+- (UIImage*) cachedImageForRequest:(NSURLRequest*)request {
     switch ([request cachePolicy]) {
         case NSURLRequestReloadIgnoringCacheData:
         case NSURLRequestReloadIgnoringLocalAndRemoteCacheData:
             return nil;
         default:
-            break;
+            return [self objectForKey:[request.URL absoluteString]];
     }
-
-	return [self objectForKey:AFImageCacheKeyFromURLRequest(request)];
 }
 
-- (void)cacheImage:(UIImage *)image
-        forRequest:(NSURLRequest *)request
-{
-    if (image && request) {
-        [self setObject:image forKey:AFImageCacheKeyFromURLRequest(request)];
+- (void) cacheImage:(UIImage*)image forKey:(NSString*)key {
+    if (image) {
+        [self setObject:image forKey:key];
+    } else {
+        [self removeObjectForKey:key];
     }
 }
 
 @end
+    
+void enqueueImageDownloadRequest(NSURL* url) {
+    [[UIImageView new] setImageWithURL:url];
+}
 
 #endif

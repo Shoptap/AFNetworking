@@ -28,10 +28,11 @@
 #if __IPHONE_OS_VERSION_MIN_REQUIRED
 #import <UIKit/UIKit.h>
 
+void enqueueImageDownloadRequest(NSURL* url);
+
 @interface AFImageCache : NSCache
-- (UIImage *)cachedImageForRequest:(NSURLRequest *)request;
-- (void)cacheImage:(UIImage *)image
-        forRequest:(NSURLRequest *)request;
+- (UIImage*) cachedImageForRequest:(NSURLRequest*)request;
+- (void) cacheImage:(UIImage*)image forKey:(NSString*)request;
 @end
 
 /**
@@ -46,7 +47,7 @@
 
  @param url The URL used for the image request.
  */
-- (void)setImageWithURL:(NSURL *)url;
+- (void) setImageWithURL:(NSURL*)url;
 
 /**
  Creates and enqueues an image request operation, which asynchronously downloads the image from the specified URL. Any previous image request for the receiver will be cancelled. If the image is cached locally, the image is set immediately, otherwise the specified placeholder image will be set immediately, and then the remote image will be set once the request is finished.
@@ -56,8 +57,7 @@
  @param url The URL used for the image request.
  @param placeholderImage The image to be set initially, until the image request finishes. If `nil`, the image view will not change its image until the image request finishes.
  */
-- (void)setImageWithURL:(NSURL *)url
-       placeholderImage:(UIImage *)placeholderImage;
+- (void) setImageWithURL:(NSURL*)url placeholderImage:(UIImage*)placeholderImage;
 
 /**
  Creates and enqueues an image request operation, which asynchronously downloads the image with the specified URL request object. Any previous image request for the receiver will be cancelled. If the image is cached locally, the image is set immediately, otherwise the specified placeholder image will be set immediately, and then the remote image will be set once the request is finished.
@@ -77,9 +77,9 @@
 /**
  Cancels any executing image request operation for the receiver, if one exists.
  */
-- (void)cancelImageRequestOperation;
+- (void) cancelImageRequestOperationForKey:(NSString*)key;
 
-+ (AFImageCache *)af_sharedImageCache;
++ (AFImageCache*) af_sharedImageCache;
 
 @end
 
