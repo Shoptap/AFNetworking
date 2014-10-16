@@ -166,6 +166,7 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
 #endif
     @synchronized (requestOperation) {
         if (self) {
+            requestOperation.queuePriority = NSOperationQueuePriorityVeryHigh;
             [requestOperation setCompletionBlockWithSuccess:^(AFHTTPRequestOperation* operation, id responseObject) {
                 @synchronized (requestOperation) {
                     AFHTTPRequestOperation* op = [cls af_operationForKey:key];
@@ -199,18 +200,21 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
                     [cls af_setOperation:nil forKey:key];
                 }
             }];
-        } else if (!requestOperation.completionBlock) {
+        } else if (!requestOperation.completionBlock) { /* this is _only_ a pre-loading request, its priority is lowest */
+            requestOperation.queuePriority = NSOperationQueuePriorityNormal;
             [requestOperation setCompletionBlockWithSuccess:^(AFHTTPRequestOperation* operation, id responseObject) {
                 @synchronized (requestOperation) {
                     [[cls af_sharedImageCache] cacheImage:responseObject forKey:[operation.request.URL absoluteString]];
                     [cls af_setOperation:nil forKey:[operation.request.URL absoluteString]];
                 }
             } failure:nil];
+        } else { /* some cell already requested this, but we've got a pre-loading request */
+            requestOperation.queuePriority = NSOperationQueuePriorityHigh;
         }
         
         if (requestOperation.completionBlock && !requestOperation.isExecuting && requestOperation.isFinished) {
             requestOperation.completionBlock();
-        }
+        } /* if we missed setting the new block before the operation finished, we want the latest requestor to get the image */
         
         [cls af_setOperation:requestOperation forKey:key];
         
