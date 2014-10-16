@@ -143,6 +143,7 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
     Class cls = [UIImageView class];
     UIImage* cachedImage = [[cls af_sharedImageCache] cachedImageForRequest:urlRequest];
     NSString* key = [urlRequest.URL absoluteString];
+    if (!key) return;
     
     if (cachedImage) {
         if (success) {
