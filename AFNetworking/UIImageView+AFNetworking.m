@@ -206,7 +206,6 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
     AFImageRequestOperation* requestOperation;
     @synchronized (oldRequestOperation) {
         UIImage* cachedImage = [[UIImageView af_sharedImageCache] cachedImageForRequest:urlRequest];
-        
         if (cachedImage) {
             if (success) {
                 success(nil, nil, cachedImage);
@@ -215,11 +214,10 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
             }
             return;
         }
-        
         if (placeholderImage) {
             self.image = placeholderImage;
         }
-    
+        
         requestOperation = oldRequestOperation ?: [[AFImageRequestOperation alloc] initWithRequest:urlRequest];
         #ifdef _AFNETWORKING_ALLOW_INVALID_SSL_CERTIFICATES_
         requestOperation.allowsInvalidSSLCertificate = YES;
@@ -231,11 +229,9 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
             [requestOperation addCompletionBlock:uiImageViewCompletionBlock];
         }
     }
-    
     if (!oldRequestOperation) { /* operations can only be started once, and we need the standard completion block to kick in */
-            [requestOperation setCompletionBlockWithSuccess:standardCompletionBlock failure:standardCompletionBlock];
-            [[UIImageView af_sharedImageRequestOperationQueue] addOperation:requestOperation];
-        }
+        [requestOperation setCompletionBlockWithSuccess:standardCompletionBlock failure:standardCompletionBlock];
+        [[UIImageView af_sharedImageRequestOperationQueue] addOperation:requestOperation];
     }
 }
 
