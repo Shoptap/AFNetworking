@@ -28,7 +28,13 @@
 
 static char kAFImageRequestOperationObjectKey;
 
-void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage* placeholderImage, void (^success)(NSURLRequest*, NSHTTPURLResponse*, UIImage*), void (^failure)(NSURLRequest* request, NSHTTPURLResponse* response, NSError* error));
+static void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage* placeholderImage, void (^success)(NSURLRequest*, NSHTTPURLResponse*, UIImage*), void (^failure)(NSURLRequest* request, NSHTTPURLResponse* response, NSError* error));
+
+@interface UIImageView (_AFNetworking)
+
+@property (nonatomic, strong, setter=af_setImageRequestOperation:) NSOperation* af_imageRequestOperation;
+
+@end
 
 @implementation UIImageView (AFNetworking)
 
@@ -74,6 +80,15 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
         _af_imageCache = [AFImageCache new];
     });
     return _af_imageCache;
+}
+
+static const char* const kImageRequestKey;
+- (NSOperation*) af_imageRequestOperation {
+    return objc_getAssociatedObject(self, &kImageRequestKey);
+}
+
+- (void) af_setImageRequestOperation:(NSOperation*)aOperation {
+    objc_setAssociatedObject(self, &kImageRequestKey, aOperation, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 - (void) setImageWithURL:(NSURL*)url {
@@ -133,8 +148,8 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
 
 @implementation NSOperation (MultipleBlocks)
 
-const char* const kExecutionBlocksKey;
-const char* const kCompletionFlagKey;
+static const char* const kExecutionBlocksKey;
+static const char* const kCompletionFlagKey;
 - (NSMutableArray*) completionBlocks {
     NSMutableArray* _completionBlocks = objc_getAssociatedObject(self, &kExecutionBlocksKey);
     if (!_completionBlocks) {
@@ -189,15 +204,17 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
     void(^uiImageViewCompletionBlock)(AFHTTPRequestOperation*, id) = preloadingCompletionBlock;
     if (self) {
         uiImageViewCompletionBlock = ^(AFHTTPRequestOperation* op, id response) {
-            if ([response isKindOfClass:[UIImage class]]) {
-                [[UIImageView af_sharedImageCache] cacheImage:response forKey:key];
-                if (success) {
-                    success(op.request, op.response, response);
-                } else {
-                    self.image = response;
+            if (op == self.af_imageRequestOperation) {
+                if ([response isKindOfClass:[UIImage class]]) {
+                    [[UIImageView af_sharedImageCache] cacheImage:response forKey:key];
+                    if (success) {
+                        success(op.request, op.response, response);
+                    } else {
+                        self.image = response;
+                    }
+                } else if (failure) {
+                    failure(op.request, op.response, response);
                 }
-            } else if (failure) {
-                failure(op.request, op.response, response);
             }
         };
     }
@@ -219,6 +236,7 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
         }
         
         requestOperation = oldRequestOperation ?: [[AFImageRequestOperation alloc] initWithRequest:urlRequest];
+        self.af_imageRequestOperation = requestOperation;
         #ifdef _AFNETWORKING_ALLOW_INVALID_SSL_CERTIFICATES_
         requestOperation.allowsInvalidSSLCertificate = YES;
         #endif
