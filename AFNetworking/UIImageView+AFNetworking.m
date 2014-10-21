@@ -199,7 +199,7 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
             } else if (failure) {
                 failure(op.request, op.response, response);
             }
-        }
+        };
     }
     
     AFImageRequestOperation* oldRequestOperation = [UIImageView af_operationForKey:key];
