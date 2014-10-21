@@ -203,6 +203,7 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
     }
     
     AFImageRequestOperation* oldRequestOperation = [UIImageView af_operationForKey:key];
+    AFImageRequestOperation* requestOperation;
     @synchronized (oldRequestOperation) {
         UIImage* cachedImage = [[UIImageView af_sharedImageCache] cachedImageForRequest:urlRequest];
         
@@ -219,7 +220,7 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
             self.image = placeholderImage;
         }
     
-        AFImageRequestOperation* requestOperation = oldRequestOperation ?: [[AFImageRequestOperation alloc] initWithRequest:urlRequest];
+        requestOperation = oldRequestOperation ?: [[AFImageRequestOperation alloc] initWithRequest:urlRequest];
         #ifdef _AFNETWORKING_ALLOW_INVALID_SSL_CERTIFICATES_
         requestOperation.allowsInvalidSSLCertificate = YES;
         #endif
