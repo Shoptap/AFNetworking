@@ -180,22 +180,6 @@ static void(^preloadingCompletionBlock)(AFHTTPRequestOperation*, id) = ^(AFHTTPR
 };
 
 void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage* placeholderImage, void (^success)(NSURLRequest*, NSHTTPURLResponse*, UIImage*), void (^failure)(NSURLRequest* request, NSHTTPURLResponse* response, NSError* error)) {
-    UIImage* cachedImage = [[UIImageView af_sharedImageCache] cachedImageForRequest:urlRequest];
-    NSString* key = [urlRequest.URL absoluteString];
-    if (!key) return;
-    
-    if (cachedImage) {
-        if (success) {
-            success(nil, nil, cachedImage);
-        } else {
-            self.image = cachedImage;
-        }
-        return;
-    }
-    
-    if (placeholderImage) {
-        self.image = placeholderImage;
-    }
     
     /**
      The default is block behaves like a pre-loading request unless there is a specific UIImageView making the request.
@@ -218,6 +202,23 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
     
     AFImageRequestOperation* oldRequestOperation = [UIImageView af_operationForKey:key];
     @synchronized (oldRequestOperation) {
+        UIImage* cachedImage = [[UIImageView af_sharedImageCache] cachedImageForRequest:urlRequest];
+        NSString* key = [urlRequest.URL absoluteString];
+        if (!key) return;
+        
+        if (cachedImage) {
+            if (success) {
+                success(nil, nil, cachedImage);
+            } else {
+                self.image = cachedImage;
+            }
+            return;
+        }
+        
+        if (placeholderImage) {
+            self.image = placeholderImage;
+        }
+    
         AFImageRequestOperation* requestOperation = oldRequestOperation ?: [[AFImageRequestOperation alloc] initWithRequest:urlRequest];
         #ifdef _AFNETWORKING_ALLOW_INVALID_SSL_CERTIFICATES_
         requestOperation.allowsInvalidSSLCertificate = YES;
