@@ -180,6 +180,8 @@ static void(^preloadingCompletionBlock)(AFHTTPRequestOperation*, id) = ^(AFHTTPR
 };
 
 void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage* placeholderImage, void (^success)(NSURLRequest*, NSHTTPURLResponse*, UIImage*), void (^failure)(NSURLRequest* request, NSHTTPURLResponse* response, NSError* error)) {
+    NSString* key = [urlRequest.URL absoluteString];
+    if (!key) return;
     
     /**
      The default is block behaves like a pre-loading request unless there is a specific UIImageView making the request.
@@ -203,8 +205,6 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
     AFImageRequestOperation* oldRequestOperation = [UIImageView af_operationForKey:key];
     @synchronized (oldRequestOperation) {
         UIImage* cachedImage = [[UIImageView af_sharedImageCache] cachedImageForRequest:urlRequest];
-        NSString* key = [urlRequest.URL absoluteString];
-        if (!key) return;
         
         if (cachedImage) {
             if (success) {
@@ -224,7 +224,7 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
         requestOperation.allowsInvalidSSLCertificate = YES;
         #endif
         if (requestOperation.isCompleted) { /* We missed the boat on getting our request in; simulate it */
-            uiImageViewCompletionBlock(requestOperation, [[UIImageView af_sharedImageCache] cachedImageForRequest:requestOperation.request])
+            uiImageViewCompletionBlock(requestOperation, [[UIImageView af_sharedImageCache] cachedImageForRequest:requestOperation.request]);
         } else {
             if (self) requestOperation.queuePriority = NSOperationQueuePriorityVeryHigh; /* There is a cell making the request, it's more important */
             [requestOperation addCompletionBlock:uiImageViewCompletionBlock];
