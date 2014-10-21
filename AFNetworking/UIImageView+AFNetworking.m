@@ -26,21 +26,9 @@
 #if defined(__IPHONE_OS_VERSION_MIN_REQUIRED)
 #import "UIImageView+AFNetworking.h"
 
-#pragma mark -
-
 static char kAFImageRequestOperationObjectKey;
 
 void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage* placeholderImage, void (^success)(NSURLRequest*, NSHTTPURLResponse*, UIImage*), void (^failure)(NSURLRequest* request, NSHTTPURLResponse* response, NSError* error));
-
-@interface UIImageView (_AFNetworking)
-@property (readwrite, nonatomic, strong, setter = af_setImageRequestOperation:) AFImageRequestOperation *af_imageRequestOperation;
-@end
-
-@implementation UIImageView (_AFNetworking)
-@dynamic af_imageRequestOperation;
-@end
-
-#pragma mark -
 
 @implementation UIImageView (AFNetworking)
 
@@ -88,14 +76,6 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
     return _af_imageCache;
 }
 
-- (AFImageRequestOperation*) af_imageRequestOperation {
-    return objc_getAssociatedObject(self, _cmd);
-}
-
-- (void) af_setImageRequestOperation:(AFImageRequestOperation*)af_imageRequestOperation {
-    objc_setAssociatedObject(self, @selector(af_imageRequestOperation), af_imageRequestOperation, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
-
 - (void) setImageWithURL:(NSURL*)url {
     [self setImageWithURL:url placeholderImage:nil];
 }
@@ -139,9 +119,68 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
 
 @end
 
+@interface NSOperation (MultipleBlocks)
+
+- (NSMutableArray*) completionBlocks;
+
+- (void) addCompletionBlock:(void(^)(AFHTTPRequestOperation*, id))completionBlock;
+
+- (void) removeCompletionBlocks;
+
+@property (nonatomic, assign, getter=isCompleted) BOOL completed;
+
+@end
+
+@implementation NSOperation (MultipleBlocks)
+
+const char* const kExecutionBlocksKey;
+const char* const kCompletionFlagKey;
+- (NSMutableArray*) completionBlocks {
+    NSMutableArray* _completionBlocks = objc_getAssociatedObject(self, &kExecutionBlocksKey);
+    if (!_completionBlocks) {
+        _completionBlocks = [NSMutableArray new];
+        objc_setAssociatedObject(self, &kExecutionBlocksKey, _completionBlocks, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    return _completionBlocks;
+}
+
+- (void) addCompletionBlock:(void(^)(AFHTTPRequestOperation*, id))completionBlock {
+    [self.completionBlocks addObject:completionBlock];
+}
+
+- (void) removeCompletionBlocks {
+    objc_setAssociatedObject(self, &kExecutionBlocksKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+- (BOOL) isCompleted {
+    return [objc_getAssociatedObject(self, &kCompletionFlagKey) boolValue];
+}
+
+- (void) setCompleted:(BOOL)completed {
+    objc_setAssociatedObject(self, &kCompletionFlagKey, @(completed), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+@end
+
+static void(^standardCompletionBlock)(AFHTTPRequestOperation*, id) = ^(AFHTTPRequestOperation* op, id response) {
+    [UIImageView af_setOperation:nil forKey:[op.request.URL absoluteString]];
+    @synchronized (op) {
+        for (void(^completionBlock)(AFHTTPRequestOperation*, id) in op.completionBlocks) {
+            completionBlock(op, response);
+        }
+        [op removeCompletionBlocks];
+        op.completed = YES;
+    }
+};
+
+static void(^preloadingCompletionBlock)(AFHTTPRequestOperation*, id) = ^(AFHTTPRequestOperation* op, id response) {
+    if ([response isKindOfClass:[UIImage class]]) {
+        [[UIImageView af_sharedImageCache] cacheImage:response forKey:[op.request.URL absoluteString]];
+    }
+};
+
 void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage* placeholderImage, void (^success)(NSURLRequest*, NSHTTPURLResponse*, UIImage*), void (^failure)(NSURLRequest* request, NSHTTPURLResponse* response, NSError* error)) {
-    Class cls = [UIImageView class];
-    UIImage* cachedImage = [[cls af_sharedImageCache] cachedImageForRequest:urlRequest];
+    UIImage* cachedImage = [[UIImageView af_sharedImageCache] cachedImageForRequest:urlRequest];
     NSString* key = [urlRequest.URL absoluteString];
     if (!key) return;
     
@@ -158,69 +197,42 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
         self.image = placeholderImage;
     }
     
-    AFImageRequestOperation* oldRequestOperation = [cls af_operationForKey:key];
-    AFImageRequestOperation* requestOperation = oldRequestOperation ?: [[AFImageRequestOperation alloc] initWithRequest:urlRequest];
-    self.af_imageRequestOperation = requestOperation;
-    
-#ifdef _AFNETWORKING_ALLOW_INVALID_SSL_CERTIFICATES_
-    requestOperation.allowsInvalidSSLCertificate = YES;
-#endif
-    @synchronized (requestOperation) {
-        if (self) {
-            requestOperation.queuePriority = NSOperationQueuePriorityVeryHigh;
-            [requestOperation setCompletionBlockWithSuccess:^(AFHTTPRequestOperation* operation, id responseObject) {
-                @synchronized (requestOperation) {
-                    AFHTTPRequestOperation* op = [cls af_operationForKey:key];
-                    if ([[op.request.URL absoluteString] isEqual:[self.af_imageRequestOperation.request.URL absoluteString]]) {
-                        if (success) {
-                            success(operation.request, operation.response, responseObject);
-                        } else if (responseObject) {
-                            self.image = responseObject;
-                        }
-                    } else {
-                        UIImage* cachedImage = [[cls af_sharedImageCache] cachedImageForRequest:self.af_imageRequestOperation.request];
-                        if (success) {
-                            success(operation.request, operation.response, cachedImage);
-                        } else if (responseObject) {
-                            self.image = cachedImage;
-                        }
-                    }
-                    self.af_imageRequestOperation = nil;
-                    [[cls af_sharedImageCache] cacheImage:responseObject forKey:operation.request];
-                    [cls af_setOperation:nil forKey:key];
+    /**
+     The default is block behaves like a pre-loading request unless there is a specific UIImageView making the request.
+     */
+    void(^uiImageViewCompletionBlock)(AFHTTPRequestOperation*, id) = preloadingCompletionBlock;
+    if (self) {
+        uiImageViewCompletionBlock = ^(AFHTTPRequestOperation* op, id response) {
+            if ([response isKindOfClass:[UIImage class]]) {
+                [[UIImageView af_sharedImageCache] cacheImage:response forKey:key];
+                if (success) {
+                    success(op.request, op.response, response);
+                } else {
+                    self.image = response;
                 }
-            } failure:^(AFHTTPRequestOperation* operation, NSError* error) {
-                @synchronized (requestOperation) {
-                    AFHTTPRequestOperation* op = [cls af_operationForKey:key];
-                    if ([[op.request.URL absoluteString] isEqual:[self.af_imageRequestOperation.request.URL absoluteString]]) {
-                        if (failure) {
-                            failure(operation.request, operation.response, error);
-                        }
-                    }
-                    self.af_imageRequestOperation = nil;
-                    [cls af_setOperation:nil forKey:key];
-                }
-            }];
-        } else if (!requestOperation.completionBlock) { /* this is _only_ a pre-loading request, its priority is lowest */
-            requestOperation.queuePriority = NSOperationQueuePriorityNormal;
-            [requestOperation setCompletionBlockWithSuccess:^(AFHTTPRequestOperation* operation, id responseObject) {
-                @synchronized (requestOperation) {
-                    [[cls af_sharedImageCache] cacheImage:responseObject forKey:[operation.request.URL absoluteString]];
-                    [cls af_setOperation:nil forKey:[operation.request.URL absoluteString]];
-                }
-            } failure:nil];
-        } else { /* some cell already requested this, but we've got a pre-loading request */
-            requestOperation.queuePriority = NSOperationQueuePriorityHigh;
+            } else if (failure) {
+                failure(op.request, op.response, response);
+            }
         }
-        
-        if (requestOperation.completionBlock && !requestOperation.isExecuting && requestOperation.isFinished) {
-            requestOperation.completionBlock();
-        } /* if we missed setting the new block before the operation finished, we want the latest requestor to get the image */
-        
-        [cls af_setOperation:requestOperation forKey:key];
-        
-        if (!oldRequestOperation) {
-            [[cls af_sharedImageRequestOperationQueue] addOperation:requestOperation];
+    }
+    
+    AFImageRequestOperation* oldRequestOperation = [UIImageView af_operationForKey:key];
+    @synchronized (oldRequestOperation) {
+        AFImageRequestOperation* requestOperation = oldRequestOperation ?: [[AFImageRequestOperation alloc] initWithRequest:urlRequest];
+        #ifdef _AFNETWORKING_ALLOW_INVALID_SSL_CERTIFICATES_
+        requestOperation.allowsInvalidSSLCertificate = YES;
+        #endif
+        if (requestOperation.isCompleted) { /* We missed the boat on getting our request in; simulate it */
+            uiImageViewCompletionBlock(requestOperation, [[UIImageView af_sharedImageCache] cachedImageForRequest:requestOperation.request])
+        } else {
+            if (self) requestOperation.queuePriority = NSOperationQueuePriorityVeryHigh; /* There is a cell making the request, it's more important */
+            [requestOperation addCompletionBlock:uiImageViewCompletionBlock];
+        }
+    }
+    
+    if (!oldRequestOperation) { /* operations can only be started once, and we need the standard completion block to kick in */
+            [requestOperation setCompletionBlockWithSuccess:standardCompletionBlock failure:standardCompletionBlock];
+            [[UIImageView af_sharedImageRequestOperationQueue] addOperation:requestOperation];
         }
     }
 }
