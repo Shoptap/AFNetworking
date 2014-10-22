@@ -236,6 +236,7 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
         }
         
         requestOperation = oldRequestOperation ?: [[AFImageRequestOperation alloc] initWithRequest:urlRequest];
+        self.af_imageRequestOperation.queuePriority = NSOperationQueuePriorityNormal;
         self.af_imageRequestOperation = requestOperation;
         #ifdef _AFNETWORKING_ALLOW_INVALID_SSL_CERTIFICATES_
         requestOperation.allowsInvalidSSLCertificate = YES;
@@ -243,7 +244,11 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
         if (requestOperation.isCompleted) { /* We missed the boat on getting our request in; simulate it */
             uiImageViewCompletionBlock(requestOperation, [[UIImageView af_sharedImageCache] cachedImageForRequest:requestOperation.request]);
         } else {
-            if (self) requestOperation.queuePriority = NSOperationQueuePriorityVeryHigh; /* There is a cell making the request, it's more important */
+            if (self) {
+                requestOperation.queuePriority = NSOperationQueuePriorityVeryHigh; /* There is a cell making the request, it's more important */
+            } else {
+                requestOperation.queuePriority = NSOperationQueuePriorityNormal;
+            }
             [requestOperation addCompletionBlock:uiImageViewCompletionBlock];
         }
     }
