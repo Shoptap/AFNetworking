@@ -236,6 +236,7 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
         }
         
         requestOperation = oldRequestOperation ?: [[AFImageRequestOperation alloc] initWithRequest:urlRequest];
+        requestOperation.automaticallyInflatesResponseImage = NO;
         self.af_imageRequestOperation.queuePriority = NSOperationQueuePriorityNormal;
         self.af_imageRequestOperation = requestOperation;
         #ifdef _AFNETWORKING_ALLOW_INVALID_SSL_CERTIFICATES_
