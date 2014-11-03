@@ -245,7 +245,7 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
             uiImageViewCompletionBlock(requestOperation, [[UIImageView af_sharedImageCache] cachedImageForRequest:requestOperation.request]);
         } else {
             if (self) {
-                requestOperation.queuePriority = NSOperationQueuePriorityVeryHigh; /* There is a cell making the request, it's more important */
+                requestOperation.queuePriority = NSOperationQueuePriorityHigh; /* There is a cell making the request, it's more important */
             } else {
                 requestOperation.queuePriority = NSOperationQueuePriorityNormal;
             }
