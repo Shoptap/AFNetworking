@@ -70,7 +70,7 @@ static id objc_setAssociatedObject_ret(id object, const void* key, id value, obj
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         _af_imageRequestOperationQueue = [NSOperationQueue new];
-        if (_af_imageRequestOperationQueue respondsToSelector:@selector(setUnderlyingQueue:)) {
+        if ([_af_imageRequestOperationQueue respondsToSelector:@selector(setUnderlyingQueue:)]) {
             _af_imageRequestOperationQueue.underlyingQueue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
         } /* There is no need for an else clause since the default is a GCD provided (background) thread */
         _af_imageRequestOperationQueue.maxConcurrentOperationCount = NSOperationQueueDefaultMaxConcurrentOperationCount;
