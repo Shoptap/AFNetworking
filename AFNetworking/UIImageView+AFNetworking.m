@@ -200,7 +200,7 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
         __weak typeof(self) weakSelf = self;
         uiImageViewCompletionBlock = ^(AFHTTPRequestOperation* op, id response) {
             __strong typeof(self) strongSelf = weakSelf;
-            if (op == strongSelf.af_imageRequestOperation) {
+            if (op == strongSelf.af_imageRequestOperation || !strongSelf) { /* if the view dealloc'd we will still call to the blocks */
                 strongSelf.af_imageRequestOperation = nil;
                 dispatch_async(dispatch_get_main_queue(), ^{ /* request was performed on a background thread */
                     __strong typeof(self) strongSelf = weakSelf;
