@@ -62,7 +62,7 @@ static id objc_setAssociatedObject_ret(id object, const void* key, id value, obj
 
 @implementation UIImageView (AFNetworking)
 
-+ (id<AFImageCache>)af_sharedImageCache {
++ (id<AFImageCache>)sharedImageCache {
     static AFImageCache* _af_defaultImageCache;
     static dispatch_once_t oncePredicate;
     dispatch_once(&oncePredicate, ^{
@@ -73,12 +73,12 @@ static id objc_setAssociatedObject_ret(id object, const void* key, id value, obj
     });
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wgnu"
-    return objc_getAssociatedObject(self, @selector(af_sharedImageCache)) ?: _af_defaultImageCache;
+    return objc_getAssociatedObject(self, @selector(sharedImageCache)) ?: _af_defaultImageCache;
 #pragma clang diagnostic pop
 }
 
-+ (void)af_setSharedImageCache:(id<AFImageCache>)imageCache {
-    objc_setAssociatedObject(self, @selector(af_sharedImageCache), imageCache, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
++ (void)setSharedImageCache:(id<AFImageCache>)imageCache {
+    objc_setAssociatedObject(self, @selector(sharedImageCache), imageCache, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 + (NSOperationQueue*)af_sharedImageRequestOperationQueue {
@@ -194,7 +194,7 @@ static id objc_setAssociatedObject_ret(id object, const void* key, id value, obj
 static void(^standardCompletionBlock)(AFHTTPRequestOperation*, id) = ^(AFHTTPRequestOperation* op, id response) {
     @synchronized (op) {
         if ([response isKindOfClass:[UIImage class]]) {
-            [[UIImageView af_sharedImageCache] cacheImage:response forRequest:op.request];
+            [[UIImageView sharedImageCache] cacheImage:response forRequest:op.request];
         }
         [UIImageView af_setOperation:nil forKey:op.request.URL.path];
         for (void(^completionBlock)(AFHTTPRequestOperation*, id) in op.completionBlocks) {
@@ -235,7 +235,7 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
     AFHTTPRequestOperation* oldRequestOperation = [UIImageView af_operationForKey:key];
     AFHTTPRequestOperation* requestOperation;
     @synchronized (oldRequestOperation) {
-        UIImage* cachedImage = [[UIImageView af_sharedImageCache] cachedImageForRequest:urlRequest];
+        UIImage* cachedImage = [[UIImageView sharedImageCache] cachedImageForRequest:urlRequest];
         if (cachedImage) {
             if (success) {
                 success(nil, nil, cachedImage);
@@ -258,7 +258,7 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
         requestOperation.allowsInvalidSSLCertificate = YES;
 #endif
         if (requestOperation.isCompleted) { /* We missed the boat on getting our request in; simulate it */
-            uiImageViewCompletionBlock(requestOperation, [[UIImageView af_sharedImageCache] cachedImageForRequest:requestOperation.request]);
+            uiImageViewCompletionBlock(requestOperation, [[UIImageView sharedImageCache] cachedImageForRequest:requestOperation.request]);
         } else {
             if (self) {
                 requestOperation.queuePriority = NSOperationQueuePriorityHigh; /* There is a cell making the request, it's more important */

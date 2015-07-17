@@ -65,14 +65,14 @@ NS_ASSUME_NONNULL_BEGIN
 /**
  The image cache used to improve image loading performance on scroll views. By default, this is an `NSCache` subclass conforming to the `AFImageCache` protocol, which listens for notification warnings and evicts objects accordingly.
 */
-+ (id<AFImageCache>)af_sharedImageCache;
++ (id<AFImageCache>)sharedImageCache;
 
 /**
  Set the cache used for image loading.
 
  @param imageCache The image cache.
  */
-+ (void)af_setSharedImageCache:(id<AFImageCache>)imageCache;
++ (void)setSharedImageCache:(id<AFImageCache>)imageCache;
 
 ///------------------------------------
 /// @name Accessing Response Serializer
