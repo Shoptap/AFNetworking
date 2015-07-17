@@ -27,9 +27,31 @@
 
 #import <UIKit/UIKit.h>
 
+void enqueueImageDownloadRequest(NSURL* __nonnull url);
+
+/**
+ Internal method that all the requests pass through.
+ */
+void setImageWithURLRequest(
+                            UIImageView* __nullable self,
+                            NSURLRequest* __nonnull urlRequest,
+                            UIImage* __nullable placeholderImage,
+                            void (^ __nullable success)(
+                                            NSURLRequest* __nullable,
+                                            NSHTTPURLResponse* __nullable,
+                                            UIImage* __nullable
+                                            ),
+                            void (^ __nullable failure)(
+                                            NSURLRequest* __nullable,
+                                            NSHTTPURLResponse* __nullable,
+                                            NSError* __nullable
+                                            )
+                            );
+
 NS_ASSUME_NONNULL_BEGIN
 
 @protocol AFURLResponseSerialization, AFImageCache;
+@class AFHTTPRequestOperation;
 
 /**
  This category adds methods to the UIKit framework's `UIImageView` class. The methods in this category provide support for loading remote images asynchronously from a URL.
@@ -43,14 +65,14 @@ NS_ASSUME_NONNULL_BEGIN
 /**
  The image cache used to improve image loading performance on scroll views. By default, this is an `NSCache` subclass conforming to the `AFImageCache` protocol, which listens for notification warnings and evicts objects accordingly.
 */
-+ (id <AFImageCache>)sharedImageCache;
++ (id<AFImageCache>)af_sharedImageCache;
 
 /**
  Set the cache used for image loading.
 
  @param imageCache The image cache.
  */
-+ (void)setSharedImageCache:(id <AFImageCache>)imageCache;
++ (void)af_setSharedImageCache:(id<AFImageCache>)imageCache;
 
 ///------------------------------------
 /// @name Accessing Response Serializer
@@ -61,7 +83,12 @@ NS_ASSUME_NONNULL_BEGIN
 
  @discussion Subclasses of `AFImageResponseSerializer` could be used to perform post-processing, such as color correction, face detection, or other effects. See https://github.com/AFNetworking/AFCoreImageSerializer
  */
-@property (nonatomic, strong) id <AFURLResponseSerialization> imageResponseSerializer;
+@property (nonatomic, strong) id<AFURLResponseSerialization> imageResponseSerializer;
+
+/**
+ The current request this `UIImageView` instance has created.
+ */
+@property (nonatomic, strong, setter = af_setImageRequestOperation:) AFHTTPRequestOperation* __nullable af_imageRequestOperation;
 
 ///--------------------
 /// @name Setting Image
@@ -76,7 +103,7 @@ NS_ASSUME_NONNULL_BEGIN
 
  @param url The URL used for the image request.
  */
-- (void)setImageWithURL:(NSURL *)url;
+- (void)setImageWithURL:(NSURL*)url;
 
 /**
  Asynchronously downloads an image from the specified URL, and sets it once the request is finished. Any previous image request for the receiver will be cancelled.
@@ -88,8 +115,7 @@ NS_ASSUME_NONNULL_BEGIN
  @param url The URL used for the image request.
  @param placeholderImage The image to be set initially, until the image request finishes. If `nil`, the image view will not change its image until the image request finishes.
  */
-- (void)setImageWithURL:(NSURL *)url
-       placeholderImage:(nullable UIImage *)placeholderImage;
+- (void)setImageWithURL:(NSURL*)url placeholderImage:(nullable UIImage*)placeholderImage;
 
 /**
  Asynchronously downloads an image from the specified URL request, and sets it once the request is finished. Any previous image request for the receiver will be cancelled.
@@ -108,11 +134,6 @@ NS_ASSUME_NONNULL_BEGIN
                        success:(nullable void (^)(NSURLRequest *request, NSHTTPURLResponse *response, UIImage *image))success
                        failure:(nullable void (^)(NSURLRequest *request, NSHTTPURLResponse *response, NSError *error))failure;
 
-/**
- Cancels any executing image operation for the receiver, if one exists.
- */
-- (void)cancelImageRequestOperation;
-
 @end
 
 #pragma mark -
@@ -129,7 +150,7 @@ NS_ASSUME_NONNULL_BEGIN
 
  @return The cached image.
  */
-- (nullable UIImage *)cachedImageForRequest:(NSURLRequest *)request;
+- (nullable UIImage*)cachedImageForRequest:(NSURLRequest*)request;
 
 /**
  Caches a particular image for the specified request.
@@ -137,8 +158,7 @@ NS_ASSUME_NONNULL_BEGIN
  @param image The image to cache.
  @param request The request to be used as a cache key.
  */
-- (void)cacheImage:(UIImage *)image
-        forRequest:(NSURLRequest *)request;
+- (void)cacheImage:(UIImage*)image forRequest:(NSURLRequest*)request;
 @end
 
 NS_ASSUME_NONNULL_END
