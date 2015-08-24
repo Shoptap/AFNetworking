@@ -251,7 +251,7 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
 #pragma clang diagnostic ignored "-Wgnu"
         requestOperation = oldRequestOperation ?: [[AFHTTPRequestOperation alloc] initWithRequest:urlRequest];
 #pragma clang diagnostic pop
-        requestOperation.responseSerializer = self.imageResponseSerializer;
+        requestOperation.responseSerializer = self.imageResponseSerializer ?: [AFImageResponseSerializer serializer];
         [UIImageView af_setOperation:requestOperation forKey:key];
         self.af_imageRequestOperation.queuePriority = NSOperationQueuePriorityNormal; // the old request is demoted
         self.af_imageRequestOperation = requestOperation;
