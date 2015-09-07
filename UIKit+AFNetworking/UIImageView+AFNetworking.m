@@ -40,7 +40,7 @@ static id objc_setAssociatedObject_ret(id object, const void* key, id value, obj
 
 @implementation AFImageCache
 
-- (UIImage*)cachedImageForRequest:(NSURLRequest*)request {
+- (id)cachedImageForRequest:(NSURLRequest*)request {
     switch ([request cachePolicy]) {
         case NSURLRequestReloadIgnoringCacheData:
         case NSURLRequestReloadIgnoringLocalAndRemoteCacheData:
@@ -53,6 +53,8 @@ static id objc_setAssociatedObject_ret(id object, const void* key, id value, obj
 - (void)cacheImage:(UIImage*)image forRequest:(NSURLRequest* __nonnull)request {
     if (image) {
         [self setObject:image forKey:request.URL.path];
+    } else {
+        [self setObject:[NSNull null] forKey:request.URL.path];
     }
 }
 
@@ -195,6 +197,8 @@ static void(^standardCompletionBlock)(AFHTTPRequestOperation*, id) = ^(AFHTTPReq
     @synchronized (op) {
         if ([response isKindOfClass:[UIImage class]]) {
             [[UIImageView sharedImageCache] cacheImage:response forRequest:op.request];
+        } else {
+            [[UIImageView sharedImageCache] cacheImage:nil forRequest:op.request];
         }
         [UIImageView af_setOperation:nil forKey:op.request.URL.path];
         for (void(^completionBlock)(AFHTTPRequestOperation*, id) in op.completionBlocks) {
@@ -235,8 +239,9 @@ void setImageWithURLRequest(UIImageView* self, NSURLRequest* urlRequest, UIImage
     AFHTTPRequestOperation* oldRequestOperation = [UIImageView af_operationForKey:key];
     AFHTTPRequestOperation* requestOperation;
     @synchronized (oldRequestOperation) {
-        UIImage* cachedImage = [[UIImageView sharedImageCache] cachedImageForRequest:urlRequest];
+        id cachedImage = [[UIImageView sharedImageCache] cachedImageForRequest:urlRequest];
         if (cachedImage) {
+            cachedImage = [cachedImage isKindOfClass:[UIImage class]] ? cachedImage : nil; // nil out NSNull, but call through with no image
             if (success) {
                 success(nil, nil, cachedImage);
             } else {

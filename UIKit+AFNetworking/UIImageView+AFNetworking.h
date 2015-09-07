@@ -150,7 +150,7 @@ NS_ASSUME_NONNULL_BEGIN
 
  @return The cached image.
  */
-- (nullable UIImage*)cachedImageForRequest:(NSURLRequest*)request;
+- (nullable id)cachedImageForRequest:(NSURLRequest*)request;
 
 /**
  Caches a particular image for the specified request.
@@ -158,7 +158,7 @@ NS_ASSUME_NONNULL_BEGIN
  @param image The image to cache.
  @param request The request to be used as a cache key.
  */
-- (void)cacheImage:(UIImage*)image forRequest:(NSURLRequest*)request;
+- (void)cacheImage:(nullable UIImage*)image forRequest:(NSURLRequest*)request;
 @end
 
 NS_ASSUME_NONNULL_END
